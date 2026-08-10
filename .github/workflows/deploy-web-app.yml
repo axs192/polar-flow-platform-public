@@ -1,0 +1,60 @@
+name: Deploy web app (build + push to GHCR)
+
+# Manual only - matches deploy-service.yml's convention: no automatic deploy
+# on merge. Pulling the new image onto the Raspberry Pi is a separate,
+# equally deliberate manual step (see docs/runbooks/ for the Pi runbook) -
+# this workflow only publishes the image, it never touches the Pi.
+on:
+  workflow_dispatch: {}
+
+# Cancel a still-running run for the same ref if a newer dispatch supersedes
+# it - see test.yml's identical block for the reasoning.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  # Required to push to GitHub Container Registry with the built-in token -
+  # no separate PAT/secret needed for this repo's own packages.
+  packages: write
+
+jobs:
+  build-and-push:
+    name: build + push (linux/amd64, linux/arm64)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # arm64 is cross-compiled/emulated on the ubuntu-latest (amd64) runner -
+      # this is why the build below is notably slower than a single-platform
+      # service build.
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # Build context is the repo root, not app/polar_web_app - the image
+      # needs services/exercise-insights too (local editable dependency, see
+      # app/polar_web_app/pyproject.toml's [tool.uv.sources]). git-SHA tag
+      # for traceability (this repo's "never :latest alone" convention -
+      # see docs/architecture.md), plus a floating `latest` specifically so
+      # the Pi's manual pull step doesn't need to track SHAs.
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: app/polar_web_app/Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository }}/web-app:${{ github.sha }}
+            ghcr.io/${{ github.repository }}/web-app:latest

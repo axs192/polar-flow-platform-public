@@ -1,0 +1,34 @@
+[project]
+name = "health-sync"
+version = "0.1.0"
+requires-python = ">=3.12"
+dependencies = [
+    "boto3==1.42.23",
+    "botocore==1.42.23",
+    "numpy==2.4.2",
+    "pandas==2.3.3",
+    "python-dotenv==1.2.2",
+    "requests==2.33.0",
+]
+
+[dependency-groups]
+dev = [
+    "coverage",
+    "freezegun==1.5.5",
+    "moto",
+    "responses",
+]
+
+[tool.uv]
+package = false
+
+[tool.coverage.run]
+source = ["src"]
+# Not part of the deployed Lambda image (see .dockerignore) - dev-only, so
+# excluded from the coverage denominator rather than counted as untested.
+omit = ["src/data/*"]
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = false
+fail_under = 80

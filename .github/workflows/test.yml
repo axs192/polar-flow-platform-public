@@ -1,0 +1,167 @@
+name: Test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# Cancel a still-running run for the same ref when a newer commit lands on
+# it, instead of letting a now-stale run finish - every push to a PR branch
+# re-triggers the full 7-service matrix, and without this a rapid sequence
+# of small pushes (see CLAUDE.md's "commit in small, discrete chunks and
+# push regularly") stacks up runs that are all superseded before they even
+# finish, burning CI minutes for no benefit. Every push still runs CI
+# immediately - this only cuts the wasted tail of a run nobody will look at.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # Every service under services/ is an independent uv project (confirmed:
+  # none imports another), and app/polar_web_app only cross-depends on
+  # exercise-insights (its pyproject.toml's [tool.uv.sources] pulls it in as
+  # a local editable package). So a PR touching one service doesn't need to
+  # re-run the other six -- this job figures out which of them actually
+  # changed and every job below gates on its output. Safety net: a change to
+  # this workflow file itself, or to the root pyproject.toml (ruff/bandit
+  # config for the whole services/ tree, per CLAUDE.md), forces the full
+  # matrix rather than trusting the filter to cover a change to its own
+  # config.
+  changes:
+    name: Detect changed paths
+    runs-on: ubuntu-latest
+    # Declaring `permissions:` on a job replaces the default token grants
+    # entirely, not adds to them -- actions/checkout needs `contents: read`
+    # explicitly here or it 404s on a private repo (confirmed live: this is
+    # exactly what happened before this comment was added).
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      services: ${{ steps.matrix.outputs.services }}
+      web_app: ${{ steps.filter.outputs.web_app == 'true' || steps.filter.outputs.workflows == 'true' || steps.filter.outputs.shared_py_config == 'true' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v4.0.3
+        id: filter
+        with:
+          filters: |
+            exercise-etl: services/exercise-etl/**
+            health-sync: services/health-sync/**
+            exercise-insights: services/exercise-insights/**
+            polar-onboarding: services/polar-onboarding/**
+            webhook-authenticator: services/webhook-authenticator/**
+            whatsapp-webhook-verify: services/whatsapp-webhook-verify/**
+            whatsapp-inbound: services/whatsapp-inbound/**
+            web_app:
+              - app/polar_web_app/**
+              - services/exercise-insights/**
+            workflows: .github/workflows/**
+            shared_py_config: pyproject.toml
+      - name: Compute unit-test matrix
+        id: matrix
+        env:
+          CHANGED: ${{ steps.filter.outputs.changes }}
+          FORCE_FULL: ${{ steps.filter.outputs.workflows == 'true' || steps.filter.outputs.shared_py_config == 'true' }}
+        run: |
+          all='["exercise-etl","health-sync","exercise-insights","polar-onboarding","webhook-authenticator","whatsapp-webhook-verify","whatsapp-inbound"]'
+          if [[ "$FORCE_FULL" == "true" ]]; then
+            echo "services=$all" >> "$GITHUB_OUTPUT"
+          else
+            # `changes` includes every matched filter name (web_app, workflows,
+            # etc. too) -- intersect against the real service list so the
+            # matrix below never gets a non-service name.
+            echo "services=$(jq -c --argjson all "$all" '[.[] | select(. as $s | $all | index($s))]' <<<"$CHANGED")" >> "$GITHUB_OUTPUT"
+          fi
+
+  unit-tests:
+    needs: changes
+    if: needs.changes.outputs.services != '[]'
+    name: Unit tests + coverage (${{ matrix.service }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        service: ${{ fromJson(needs.changes.outputs.services) }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v9.0.0
+      - name: Install dependencies
+        working-directory: services/${{ matrix.service }}
+        run: uv sync --locked
+
+      - name: Run tests under coverage
+        working-directory: services/${{ matrix.service }}
+        run: uv run coverage run -m unittest discover -s tests -t .
+
+      # coverage report exits non-zero if the service's [tool.coverage.report]
+      # fail_under isn't met (see pyproject.toml), which fails this job -
+      # that's the coverage gate, there is no separate enforcement step.
+      - name: Coverage report
+        if: always()
+        working-directory: services/${{ matrix.service }}
+        run: |
+          {
+            echo "### Coverage: ${{ matrix.service }}"
+            echo '```'
+            uv run coverage report -m
+            echo '```'
+          } | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - name: Coverage HTML report
+        if: always()
+        working-directory: services/${{ matrix.service }}
+        run: uv run coverage html
+
+      - name: Upload coverage HTML artifact
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: coverage-html-${{ matrix.service }}
+          path: services/${{ matrix.service }}/htmlcov/
+          retention-days: 14
+
+  web-app-tests:
+    needs: changes
+    if: needs.changes.outputs.web_app == 'true'
+    name: Unit tests + coverage (app/polar_web_app)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v9.0.0
+
+      # Not in the services/ matrix above: different path, and it depends on
+      # services/exercise-insights as a local editable package (see
+      # app/polar_web_app/pyproject.toml's [tool.uv.sources]) rather than
+      # being a standalone service, so it needs its own job.
+      - name: Install dependencies
+        working-directory: app/polar_web_app
+        run: uv sync --locked
+
+      - name: Run tests under coverage
+        working-directory: app/polar_web_app
+        run: uv run coverage run -m unittest discover -s tests -t .
+
+      - name: Coverage report
+        if: always()
+        working-directory: app/polar_web_app
+        run: |
+          {
+            echo "### Coverage: app/polar_web_app"
+            echo '```'
+            uv run coverage report -m
+            echo '```'
+          } | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - name: Coverage HTML report
+        if: always()
+        working-directory: app/polar_web_app
+        run: uv run coverage html
+
+      - name: Upload coverage HTML artifact
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: coverage-html-web-app
+          path: app/polar_web_app/htmlcov/
+          retention-days: 14

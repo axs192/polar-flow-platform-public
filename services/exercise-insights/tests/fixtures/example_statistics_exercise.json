@@ -1,0 +1,109 @@
+{
+  "athlete_summary": {
+    "sport": "running",
+    "goal": "75km ultramarathon"
+  },
+
+  "training_load": {
+    "7d": {
+      "total_cardio_load": 540,
+      "total_distance_km": 42.6,
+      "total_duration_hr": 5.8,
+      "runs": 4,
+      "longest_run_km": 18.2
+    },
+
+    "28d": {
+      "avg_weekly_distance_km": 39.4,
+      "avg_weekly_duration_hr": 5.2,
+      "avg_weekly_cardio_load": 510,
+      "runs_per_week": 3.8,
+      "longest_run_km": 21.5
+    },
+
+    "90d": {
+      "avg_weekly_distance_km": 34.1,
+      "avg_weekly_duration_hr": 4.5,
+      "avg_weekly_cardio_load": 455,
+      "runs_per_week": 3.4,
+      "longest_run_km": 24.0
+    }
+  },
+
+  "load_management": {
+    "acute_chronic_load_ratio": 1.06,
+    "load_trend_28d": "increasing",
+    "load_trend_90d": "gradual_build"
+  },
+
+  "intensity_distribution": {
+    "7d": {
+      "zone1_pct": 17,
+      "zone2_pct": 66,
+      "zone3_pct": 14,
+      "zone4_pct": 3
+    },
+
+    "28d": {
+      "zone1_pct": 19,
+      "zone2_pct": 64,
+      "zone3_pct": 14,
+      "zone4_pct": 3
+    },
+
+    "90d": {
+      "zone1_pct": 21,
+      "zone2_pct": 62,
+      "zone3_pct": 14,
+      "zone4_pct": 3
+    }
+  },
+
+  "aerobic_efficiency": {
+    "running_index": {
+      "7d_mean": 52.1,
+      "28d_baseline": 51.2,
+      "90d_baseline": 50.4,
+      "trend_28d": 0.9
+    },
+
+    "efficiency_factor": {
+      "7d_mean": 0.091,
+      "28d_baseline": 0.088,
+      "trend_28d": 0.003
+    }
+  },
+
+  "endurance_signals": {
+    "hr_drift": {
+      "7d_mean": 3.9,
+      "28d_mean": 4.4,
+      "90d_mean": 4.8
+    },
+
+    "pace_variability": {
+      "7d_mean": 4.6,
+      "28d_mean": 5.1,
+      "90d_mean": 5.4
+    }
+  },
+
+  "long_run_metrics": {
+    "7d": {
+      "distance_km": 18.2,
+      "duration_hr": 2.0,
+      "avg_hr": 141,
+      "hr_drift": 4.1,
+      "zone2_pct": 72
+    },
+
+    "28d": {
+      "avg_distance_km": 17.3,
+      "avg_hr_drift": 4.5
+    },
+
+    "90d": {
+      "max_distance_km": 24.0
+    }
+  }
+}

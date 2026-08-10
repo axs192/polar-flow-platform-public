@@ -1,0 +1,27 @@
+[project]
+name = "polar-onboarding"
+version = "0.1.0"
+requires-python = ">=3.12"
+dependencies = [
+    "boto3",
+    "python-dotenv",
+    "requests",
+]
+
+[dependency-groups]
+dev = [
+    "coverage",
+    "moto",
+    "responses",
+]
+
+[tool.uv]
+package = false
+
+[tool.coverage.run]
+source = ["src"]
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = false
+fail_under = 95

@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Training Plan</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🏃</text></svg>" />
+  <link rel="stylesheet" href="/static/styles.css" />
+  <style>
+    /* Plan-page-specific styles -- :root tokens (--bg/--panel/--text/etc) come
+       from styles.css, shared with index.html/login.html. Everything below is
+       only used on this page. */
+    :root {
+      --planned: #3987e5;
+      --actual: #d95926;
+    }
+    main { max-width: 980px; }
+    .mono { font-family: ui-monospace, "SF Mono", "Cascadia Code", monospace; font-variant-numeric: tabular-nums; }
+
+    #plan-view { display: flex; flex-direction: column; gap: 20px; }
+
+    .card { background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px; }
+    .card-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 4px; }
+    .card h2 { font-size: 0.95rem; margin: 0 0 4px; display: flex; align-items: center; gap: 8px; }
+    .card .card-sub { margin: 0; color: var(--muted); font-size: 0.82rem; }
+    .card-head .card-sub { margin-bottom: 16px; }
+
+    .edit-toggle {
+      padding: 6px 14px; font: inherit; font-size: 0.78rem; font-weight: 600;
+      color: var(--accent); background: var(--panel-2); border: 1px solid var(--border);
+      border-radius: 999px; cursor: pointer; flex: none;
+    }
+    .edit-toggle.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+    .edit-toggle:hover { border-color: var(--accent); }
+
+    /* Summary strip */
+    .summary-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; }
+    .stat { background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px 16px; }
+    .stat .label { color: var(--muted); font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 6px; }
+    .stat .value { font-size: 1.2rem; font-weight: 600; }
+    .stat .value .sep { color: var(--muted); font-weight: 400; font-size: 0.95rem; margin: 0 3px; }
+
+    /* Chart card */
+    .chart-toolbar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; gap: 12px; flex-wrap: wrap; }
+    .segmented { display: inline-flex; background: var(--panel-2); border: 1px solid var(--border); border-radius: 999px; padding: 2px; }
+    .segmented button { padding: 6px 14px; font: inherit; font-size: 0.8rem; color: var(--muted); background: transparent; border: none; border-radius: 999px; cursor: pointer; }
+    .segmented button.active { background: var(--accent); color: #fff; }
+    .legend { display: flex; gap: 16px; font-size: 0.8rem; color: var(--muted); }
+    .legend span { display: inline-flex; align-items: center; gap: 6px; }
+    .legend .swatch { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
+    .chart-wrap { position: relative; height: 240px; }
+    .sub-chart-label { color: var(--muted); font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.04em; margin: 14px 0 6px; }
+    .chart-wrap-sm { position: relative; height: 110px; }
+
+    /* Themes: a legend list below the chart, not a grid kept in sync with it
+       -- the per-week visual lives baked into the bar chart's own canvas
+       (see plan.js's themeLanes plugin), which is the only way to guarantee
+       it never drifts out of alignment with the bars. */
+    .theme-legend { display: flex; flex-direction: column; gap: 8px; }
+    .theme-row {
+      display: flex; align-items: center; gap: 10px; padding: 8px 12px;
+      background: var(--panel-2); border: 1px solid var(--border); border-radius: 8px;
+    }
+    .theme-row.editing { flex-direction: column; align-items: stretch; gap: 10px; }
+    .theme-row .dot { width: 10px; height: 10px; border-radius: 3px; flex: none; }
+    .theme-row .txt { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .theme-row .week-range { color: var(--muted); font-size: 0.78rem; margin-left: auto; flex: none; }
+    .theme-row-head { display: flex; align-items: center; gap: 8px; }
+    .theme-row-head input.cell-input { padding: 5px 8px; font-size: 0.85rem; }
+    .week-chips { display: flex; flex-wrap: wrap; gap: 5px; }
+    .week-chip {
+      padding: 4px 9px; font: inherit; font-size: 0.72rem; color: var(--muted);
+      background: var(--panel); border: 1px solid var(--border); border-radius: 6px; cursor: pointer;
+    }
+    .week-chip:hover { border-color: var(--accent); }
+    .swatch-btn { width: 22px; height: 22px; border-radius: 6px; border: 1px solid var(--border); cursor: pointer; padding: 0; flex: none; }
+    .icon-btn {
+      width: 26px; height: 26px; display: inline-flex; align-items: center; justify-content: center;
+      background: transparent; border: 1px solid var(--border); border-radius: 6px;
+      color: var(--muted); cursor: pointer; font-size: 0.9rem; flex: none;
+    }
+    .icon-btn:hover { border-color: #ff8080; color: #ff8080; }
+    .add-row-btn {
+      margin-top: 8px; padding: 8px 14px; font: inherit; font-size: 0.82rem; font-weight: 600;
+      color: var(--accent); background: var(--panel-2); border: 1px dashed var(--border);
+      border-radius: var(--radius); cursor: pointer; width: 100%;
+    }
+    .add-row-btn:hover { border-color: var(--accent); }
+
+    /* Themes and Weekly plan cards: native <details>, closed by default --
+       the chart already shows the summary, so full detail is opt-in. */
+    details.card { padding: 0; }
+    details.card summary {
+      list-style: none; cursor: pointer; padding: 20px; display: flex;
+      align-items: flex-start; justify-content: space-between; gap: 12px;
+    }
+    details.card summary::-webkit-details-marker { display: none; }
+    details.card summary .chevron { color: var(--muted); flex: none; margin-top: 3px; transition: transform 0.15s ease; }
+    details.card[open] summary .chevron { transform: rotate(90deg); }
+    details.card summary h2 { margin: 0 0 4px; }
+    details.card summary .card-sub { margin: 0; }
+    .details-body { padding: 0 20px 20px; }
+    .details-body-head { display: flex; justify-content: flex-end; margin-bottom: 10px; }
+
+    /* Weekly plan table */
+    table { width: 100%; border-collapse: collapse; }
+    th { text-align: left; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); font-weight: 600; padding: 0 10px 8px; }
+    td { padding: 7px 10px; border-top: 1px solid var(--border); vertical-align: middle; }
+    tr:first-child td { border-top: none; }
+    .table-scroll { overflow-x: auto; }
+    input.cell-input {
+      width: 100%; padding: 7px 9px; font: inherit; font-size: 0.85rem; color: var(--text);
+      background: var(--panel-2); border: 1px solid var(--border); border-radius: 6px;
+    }
+    input.cell-input:focus { outline: none; border-color: var(--accent); }
+    input.plan-num { width: 80px; }
+    .actual-cell { color: var(--muted); }
+    .actual-cell.na { opacity: 0.5; }
+    .wc-label { color: var(--text); }
+    .wc-label .muted-sub { color: var(--muted); font-size: 0.76rem; }
+
+    /* Start-plan empty state */
+    .start-plan-form { display: flex; align-items: flex-end; gap: 12px; flex-wrap: wrap; margin-top: 14px; }
+    .start-plan-form label { display: block; font-size: 0.78rem; color: var(--muted); margin-bottom: 6px; }
+    .start-plan-form input[type="date"] { width: auto; }
+
+    /* Chat */
+    #conversation { display: flex; flex-direction: column; gap: 12px; margin-bottom: 14px; }
+    #conversation:empty::before { content: "Tell me your goal and how many weeks, and I'll draft the plan above."; display: block; color: var(--muted); font-size: 0.88rem; }
+    .turn { display: flex; flex-direction: column; gap: 8px; }
+    .question { align-self: flex-end; max-width: 85%; padding: 10px 14px; color: #fff; background: var(--accent); border-radius: var(--radius); white-space: pre-wrap; line-height: 1.5; font-size: 0.9rem; }
+    .answer { background: var(--panel-2); border: 1px solid var(--border); border-radius: var(--radius); padding: 12px 14px; white-space: pre-wrap; line-height: 1.5; font-size: 0.9rem; }
+    form.chat-form { display: flex; gap: 10px; }
+    .chat-form textarea {
+      flex: 1; resize: vertical; min-height: 48px; padding: 12px 14px; font: inherit; color: var(--text);
+      background: var(--panel-2); border: 1px solid var(--border); border-radius: var(--radius);
+    }
+    .chat-form textarea:focus { outline: none; border-color: var(--accent); }
+    button.send {
+      padding: 0 20px; font: inherit; font-weight: 600; color: #fff; background: var(--accent);
+      border: none; border-radius: var(--radius); cursor: pointer; align-self: stretch;
+    }
+    .hint { color: var(--muted); font-size: 0.76rem; margin-top: 8px; }
+    .tool {
+      display: inline-block; margin: 6px 0; padding: 4px 10px; font-size: 0.82rem;
+      color: var(--accent); background: var(--panel-2); border: 1px solid var(--border); border-radius: 999px;
+    }
+    .error { color: #ff8080; }
+
+    @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+  </style>
+</head>
+<body>
+  <main>
+    <header class="app-header">
+      <div>
+        <h1>Training Plan</h1>
+        <p>Plan and track a multi-week block, and let the plan-building coach draft or revise it with you.</p>
+      </div>
+      <div class="header-actions">
+        <a class="nav-pill" href="/">&larr; Coach chat</a>
+        <form method="post" action="/auth/logout">
+          <button type="submit" class="secondary">Sign out</button>
+        </form>
+      </div>
+    </header>
+
+    <div class="card" id="empty-state-card" hidden>
+      <h2>Start your training plan</h2>
+      <p class="card-sub">Pick the Monday your first training week begins. You can add more weeks (or remove this one) once it's created &mdash; or just tell the chat below your goal and how many weeks, and it'll draft the whole thing for you.</p>
+      <form id="start-plan-form" class="start-plan-form">
+        <div>
+          <label for="start-date-input">Week 1 start date (W/C)</label>
+          <input type="date" id="start-date-input" class="cell-input">
+        </div>
+        <button class="edit-toggle active" type="submit" style="padding:9px 18px;">Create plan</button>
+      </form>
+    </div>
+
+    <div id="plan-view" hidden>
+      <div class="summary-row" id="summary-row"></div>
+
+      <div class="card">
+        <div class="chart-toolbar">
+          <div>
+            <h2>Planned vs. actual</h2>
+            <p class="card-sub">Hover a bar or point for that week's numbers.</p>
+          </div>
+          <div style="display:flex; align-items:center; gap:16px; flex-wrap:wrap;">
+            <div class="legend">
+              <span><i class="swatch" style="background:var(--planned)"></i>Planned</span>
+              <span><i class="swatch" style="background:var(--actual)"></i>Actual</span>
+            </div>
+            <div class="segmented" id="axis-toggle">
+              <button type="button" data-axis="distance" class="active">Distance</button>
+              <button type="button" data-axis="duration">Duration</button>
+            </div>
+          </div>
+        </div>
+        <div class="chart-wrap"><canvas id="plan-chart"></canvas></div>
+        <p class="sub-chart-label">Elevation gain (ft)</p>
+        <div class="chart-wrap-sm"><canvas id="elevation-chart"></canvas></div>
+      </div>
+
+      <details class="card" id="themes-details">
+        <summary>
+          <div>
+            <h2>Themes</h2>
+            <p class="card-sub">Shown as colored, labeled bands under the chart above &mdash; closed by default.</p>
+          </div>
+          <svg class="chevron" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 6l6 6-6 6"/></svg>
+        </summary>
+        <div class="details-body">
+          <div class="details-body-head">
+            <button class="edit-toggle" id="themes-edit-toggle" type="button">Edit</button>
+          </div>
+          <div id="themes-legend" class="theme-legend"></div>
+          <button class="add-row-btn" id="add-theme" type="button" hidden>+ Add theme</button>
+        </div>
+      </details>
+
+      <details class="card" id="weeks-details">
+        <summary>
+          <div>
+            <h2>Weekly plan</h2>
+            <p class="card-sub">Same numbers as the chart above, in table form &mdash; closed by default.</p>
+          </div>
+          <svg class="chevron" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 6l6 6-6 6"/></svg>
+        </summary>
+        <div class="details-body">
+          <div class="details-body-head">
+            <button class="edit-toggle" id="weeks-edit-toggle" type="button">Edit</button>
+          </div>
+          <div class="table-scroll">
+            <table>
+              <thead id="weeks-thead"></thead>
+              <tbody id="weeks-body" class="mono"></tbody>
+            </table>
+          </div>
+          <button class="add-row-btn" id="add-week" type="button" hidden>+ Add week</button>
+        </div>
+      </details>
+    </div>
+
+    <div class="card">
+      <h2>Ask the planning coach</h2>
+      <p class="card-sub">Scoped to building and revising this plan &mdash; for general coaching, use the main chat.</p>
+      <div id="conversation"></div>
+      <form class="chat-form" id="chat-form">
+        <textarea id="chat-input" placeholder="e.g. Push the taper out by a week"></textarea>
+        <button class="send" type="submit">Send</button>
+      </form>
+      <p class="hint">Edits made here update the chart above automatically.</p>
+    </div>
+  </main>
+
+  <script src="/static/vendor/chart.umd.min.js"></script>
+  <script src="/static/sse.js"></script>
+  <script src="/static/plan.js"></script>
+</body>
+</html>

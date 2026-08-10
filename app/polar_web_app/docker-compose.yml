@@ -1,0 +1,19 @@
+# Runs the web app's published image on the Raspberry Pi. Not used for local
+# dev (use `uv run python -m src.main` for that, per README.md) and not built
+# from here -- the image is built and pushed by
+# .github/workflows/deploy-web-app.yml, this only pulls and runs it.
+#
+# All secrets come from a sibling `.env` file (gitignored, created once on the
+# Pi -- see docs/runbooks/raspberry-pi-web-app.md), never baked into the image
+# or this file.
+
+services:
+  web-app:
+    image: ghcr.io/${GITHUB_REPOSITORY:-YOUR_GITHUB_ORG/polar-flow-platform}/web-app:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    environment:
+      HOST: "0.0.0.0"

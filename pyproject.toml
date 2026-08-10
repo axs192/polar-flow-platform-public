@@ -1,0 +1,16 @@
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+extend-exclude = ["terraform"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+ignore = [
+    "E501",  # line length is handled by the formatter, not worth a hard failure
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["S101"]
+
+[tool.bandit]
+exclude_dirs = ["tests", ".venv", "terraform"]

@@ -1,0 +1,16 @@
+repos:
+  - repo: https://github.com/gitleaks/gitleaks
+    # Pinned below v8.19 deliberately: newer gitleaks releases use the
+    # wasilibs/go-re2 WASM regex engine, which silently matches nothing in
+    # this environment's sandbox (no error, just zero detections ever -
+    # verified against AWS key and PEM private key test fixtures). v8.18.4
+    # uses Go's stdlib regexp and was confirmed to actually catch both.
+    # Re-test before bumping this pin.
+    rev: v8.18.4
+    hooks:
+      - id: gitleaks-system
+        # Upstream's gitleaks-system hook definition omits pass_filenames: false
+        # (unlike its gitleaks/gitleaks-docker siblings), so pre-commit appends
+        # every matched file as a positional arg to `gitleaks git`, which only
+        # accepts one. Override it here.
+        pass_filenames: false

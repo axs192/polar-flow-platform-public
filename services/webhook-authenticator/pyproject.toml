@@ -1,0 +1,24 @@
+[project]
+name = "webhook-authenticator"
+version = "0.1.0"
+requires-python = ">=3.12"
+dependencies = [
+    "boto3",
+]
+
+[dependency-groups]
+dev = [
+    "coverage",
+    "moto",
+]
+
+[tool.uv]
+package = false
+
+[tool.coverage.run]
+source = ["src"]
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = false
+fail_under = 90

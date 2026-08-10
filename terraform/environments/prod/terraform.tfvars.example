@@ -1,0 +1,25 @@
+# Copy to terraform.tfvars (gitignored - never commit real values) and fill in.
+
+alert_email = "you@example.com"
+
+# Must already exist in ECR before the first apply - see README's bootstrap
+# step. Use an immutable tag (image_tag_mutability = IMMUTABLE on the repo),
+# not :latest.
+exercise_etl_image_uri       = "<account-id>.dkr.ecr.us-east-1.amazonaws.com/exercise-etl:<tag>"
+health_sync_image_uri        = "<account-id>.dkr.ecr.us-east-1.amazonaws.com/health-sync:<tag>"
+exercise_insights_image_uri  = "<account-id>.dkr.ecr.us-east-1.amazonaws.com/exercise-insights:<tag>"
+
+# Leave blank on the first apply - no Polar user exists yet. Fill in with the
+# "polar-user-id"/x_user_id from `polar-onboarding authorize`+`register` once
+# you've onboarded yourself, then re-apply. See this directory's README.
+polar_user_id = ""
+
+# Your own WhatsApp number (E.164 format, e.g. +15551234567) - where
+# health-sync's daily summary and exercise-insights' Q&A replies get sent.
+to_mobile_number = "+15551234567"
+
+# Meta's WhatsApp Business phone number ID (not a phone number - the numeric
+# ID Meta assigns the sending number in the WhatsApp Business dashboard, e.g.
+# 109876543210987). See "Set up Meta/WhatsApp + OpenAI" in this directory's
+# README for where to find it.
+from_mobile_number = "<meta-phone-number-id>"

@@ -1,0 +1,71 @@
+name: Deploy service (build + push + update Lambda)
+
+# Manual only - no automatic deploy-on-merge, consistent with this repo's
+# convention of never mutating the real account without an explicit human
+# go-ahead (Terraform apply itself is manual/local now too - see
+# terraform/environments/prod/cicd.tf's top comment). Per-service rather than
+# "deploy everything that changed" because that's what a manual trigger
+# naturally wants: you pick the one service you just changed, not rebuild all
+# 3 on every deploy.
+on:
+  workflow_dispatch:
+    inputs:
+      service:
+        description: "Which service to build, push to ECR, and deploy"
+        required: true
+        type: choice
+        options:
+          - exercise-etl
+          - health-sync
+          - exercise-insights
+
+permissions:
+  id-token: write # required for OIDC (aws-actions/configure-aws-credentials)
+  contents: read
+
+jobs:
+  deploy:
+    name: deploy ${{ inputs.service }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # gha-deploy - see terraform/environments/prod/cicd.tf. Trust policy
+      # only allows this from a run on refs/heads/main, independent of
+      # "on: workflow_dispatch" alone. No aws-profile input here (unlike
+      # the terraform workflows) - that was only ever needed to satisfy
+      # versions.tf's hardcoded S3 backend profile; docker/ECR/Lambda CLI
+      # calls below don't go through Terraform's backend at all.
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: us-east-1
+
+      - name: Build, push (git-SHA tag, never :latest - see docs/architecture.md's fixes-baked-in), and deploy
+        env:
+          SERVICE: ${{ inputs.service }}
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          account_id=$(aws sts get-caller-identity --query Account --output text)
+          registry="${account_id}.dkr.ecr.us-east-1.amazonaws.com"
+          image="${registry}/${SERVICE}:${IMAGE_TAG}"
+
+          aws ecr get-login-password --region us-east-1 \
+            | docker login --username AWS --password-stdin "$registry"
+
+          docker build -t "$image" "services/${SERVICE}"
+          docker push "$image"
+
+          aws lambda update-function-code \
+            --function-name "$SERVICE" \
+            --image-uri "$image" \
+            --no-cli-pager
+
+          aws lambda wait function-updated --function-name "$SERVICE"
+          echo "Deployed ${SERVICE} -> ${image}" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Reminder to keep terraform.tfvars in sync
+        run: |
+          echo "::notice::Update the matching *_image_uri in terraform.tfvars (or GHA_DEPLOY equivalent) to this tag so a future terraform apply doesn't disagree - image_uri is lifecycle.ignore_changes'd so it won't fight this deploy, but it's worth keeping the record accurate."

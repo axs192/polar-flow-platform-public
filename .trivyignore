@@ -1,0 +1,46 @@
+# Real HIGH CVEs baked into AWS's current public.ecr.aws/lambda/python:3.12
+# base image (verified 2026-08-06 against a fresh `docker pull`, image
+# build amazon 2023.12.20260727) - not introduced by our code or Python
+# dependencies (those are covered separately by pip-audit). Affects all 3
+# Docker-based services identically, since they share this base image.
+#
+# None are reachable through anything our Lambda handlers actually do:
+# gawk and rpm are OS utilities never invoked by our code (no shelling
+# out, and Lambda's execution environment exposes no interactive shell to
+# untrusted input anyway); glib2's xdgmime (MIME-type sniffing) is never
+# called by our Python code either.
+#
+# Re-check by rebuilding + rescanning against a fresh base-image pull -
+# AWS periodically ships patched builds under the same floating tag, which
+# would silently resolve these without any change here. Re-check by:
+# 2026-11-06 (3 months out).
+CVE-2026-40467
+CVE-2026-40468
+CVE-2026-40553
+CVE-2026-16118
+CVE-2026-44605
+
+# --- terraform/ config scan (added once terraform-security ran for real) ---
+
+# S3 buckets and the SNS alerts topic use AWS-managed encryption (SSE-S3 /
+# alias/aws/sns), not a customer-managed KMS key - a deliberate cost/
+# complexity call already made and documented in docs/architecture.md's
+# Observability section ("skipping ... a customer-managed KMS key as
+# unnecessary for the current threat model/traffic"), not an oversight.
+# AVD-AWS-0132 covers S3 (bootstrap's state bucket + both environments/prod
+# buckets); AVD-AWS-0136 is the same call for the SNS topic.
+AVD-AWS-0132
+AVD-AWS-0136
+
+# False positive, not a suppression of a real gap: aws_s3_bucket_public_access_block
+# IS present for both environments/prod buckets (s3.tf, all 4 flags true -
+# block_public_acls/block_public_policy/ignore_public_acls/restrict_public_buckets).
+# Trivy's static analysis has a documented limitation linking a
+# for_each-based public_access_block back to a for_each-based bucket with a
+# computed name (aquasecurity/trivy#4997, #5001, #6385) - exactly this
+# repo's shape (bucket name built from var.project_name + a random_id).
+# Verified by reading s3.tf directly, not assumed.
+AVD-AWS-0086
+AVD-AWS-0087
+AVD-AWS-0091
+AVD-AWS-0093

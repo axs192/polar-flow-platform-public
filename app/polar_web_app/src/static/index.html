@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>AI Running Coach</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🏃</text></svg>" />
+  <link rel="stylesheet" href="/static/styles.css" />
+</head>
+<body>
+  <main>
+    <header class="app-header">
+      <div>
+        <h1 id="title">AI Running Coach</h1>
+        <p>Ask your coach about your real training data — pace, load, recovery, and progress toward your goal.</p>
+      </div>
+      <div class="header-actions">
+        <a class="nav-pill" href="/plan">Training plan &rarr;</a>
+        <form method="post" action="/auth/logout">
+          <button type="submit" class="secondary">Sign out</button>
+        </form>
+      </div>
+    </header>
+
+    <div id="conversation"></div>
+
+    <form id="ask-form">
+      <textarea id="question" placeholder="e.g. How's my training load looking this week?" autofocus></textarea>
+      <button id="submit" type="submit">Ask</button>
+    </form>
+    <div id="command-menu" class="command-menu" hidden></div>
+    <p class="hint">Streaming responses. Tool calls appear as pills above the answer. Type <code>/</code> for commands.</p>
+  </main>
+
+  <script src="/static/sse.js"></script>
+  <script src="/static/app.js"></script>
+</body>
+</html>

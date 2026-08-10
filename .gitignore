@@ -1,0 +1,23 @@
+__pycache__/
+*.pyc
+.venv/
+venv/
+.ruff_cache/
+.coverage
+htmlcov/
+logs/
+*.log
+.env
+.terraform/
+.build/
+tfplan
+*.tfplan
+*.tfstate
+*.tfstate.*
+*.tfvars
+*.tfvars.json
+*.secrets.json
+# .terraform.lock.hcl is intentionally NOT ignored - Terraform's own
+# guidance is to commit it, it pins provider versions like a lockfile.
+tmp/
+.DS_Store

@@ -1,0 +1,20 @@
+# Repo-root .dockerignore -- used when a service's build needs more than its own
+# directory as context (currently just app/polar_web_app, which depends on
+# services/exercise-insights). Per-service builds (services/<name> as context, per
+# .github/workflows/deploy-service.yml) read their own local .dockerignore instead;
+# this file has no effect on those.
+
+*
+!app/polar_web_app/
+!services/exercise-insights/
+
+**/__pycache__/
+**/*.pyc
+**/.venv/
+**/.env
+**/logs/
+**/.git
+**/.ruff_cache/
+**/htmlcov/
+**/.coverage
+**/.pytest_cache/

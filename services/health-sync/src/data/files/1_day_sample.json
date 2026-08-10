@@ -1,0 +1,14 @@
+[
+    {
+        "start_time": "2025-09-10T00:00",
+        "end_time": "2025-09-10T12:48",
+        "active_duration": "PT2H11M30S",
+        "inactive_duration": "PT4H13M",
+        "daily_activity": 25.15,
+        "calories": 1265,
+        "active_calories": 386,
+        "steps": 4050,
+        "inactivity_alert_count": 1,
+        "distance_from_steps": 2235.57
+    }
+]

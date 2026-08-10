@@ -1,0 +1,191 @@
+name: Security scan
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# See test.yml's identical block for the reasoning - cancels a superseded
+# run's remaining jobs (gitleaks, bandit, the 7-service pip-audit matrix,
+# the 3-service container-scan incl. a full docker build each, and the
+# terraform Trivy scan) the moment a newer commit lands on the same ref.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # Same rationale as test.yml's identically-named job (see its comment) --
+  # duplicated rather than factored into a shared reusable workflow, since
+  # this workflow needs a different filter subset (a 3-service container-scan
+  # slice test.yml doesn't have) and the service list is already duplicated
+  # between the two workflows' matrices today.
+  changes:
+    name: Detect changed paths
+    runs-on: ubuntu-latest
+    # See test.yml's identical job for why `contents: read` is required here
+    # alongside `pull-requests: read` -- declaring `permissions:` replaces
+    # the default grants rather than adding to them.
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      services: ${{ steps.matrix.outputs.services }}
+      container_services: ${{ steps.matrix.outputs.container_services }}
+      terraform: ${{ steps.filter.outputs.terraform == 'true' || steps.filter.outputs.workflows == 'true' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v4.0.3
+        id: filter
+        with:
+          filters: |
+            exercise-etl: services/exercise-etl/**
+            health-sync: services/health-sync/**
+            exercise-insights: services/exercise-insights/**
+            polar-onboarding: services/polar-onboarding/**
+            webhook-authenticator: services/webhook-authenticator/**
+            whatsapp-webhook-verify: services/whatsapp-webhook-verify/**
+            whatsapp-inbound: services/whatsapp-inbound/**
+            terraform: terraform/**
+            workflows: .github/workflows/**
+            shared_py_config: pyproject.toml
+      - name: Compute service matrices
+        id: matrix
+        env:
+          CHANGED: ${{ steps.filter.outputs.changes }}
+          FORCE_FULL: ${{ steps.filter.outputs.workflows == 'true' || steps.filter.outputs.shared_py_config == 'true' }}
+        run: |
+          all='["exercise-etl","health-sync","exercise-insights","polar-onboarding","webhook-authenticator","whatsapp-webhook-verify","whatsapp-inbound"]'
+          containers='["exercise-etl","health-sync","exercise-insights"]'
+          if [[ "$FORCE_FULL" == "true" ]]; then
+            echo "services=$all" >> "$GITHUB_OUTPUT"
+            echo "container_services=$containers" >> "$GITHUB_OUTPUT"
+          else
+            services=$(jq -c --argjson all "$all" '[.[] | select(. as $s | $all | index($s))]' <<<"$CHANGED")
+            echo "services=$services" >> "$GITHUB_OUTPUT"
+            echo "container_services=$(jq -c --argjson c "$containers" '[.[] | select(. as $s | $c | index($s))]' <<<"$services")" >> "$GITHUB_OUTPUT"
+          fi
+
+  secret-scan:
+    name: Full-history secret scan (gitleaks)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # full history, not a shallow clone
+      # Not gitleaks/gitleaks-action@v2: its default push-event mode tries
+      # to diff only the newly-pushed commits (before-SHA..after-SHA), which
+      # breaks with "unknown revision" whenever the push's before-SHA
+      # happens to be the repo's actual root commit (no parent to diff
+      # from) - hit exactly this scanning this repo's own history. Running
+      # the CLI directly with no range args scans the whole history
+      # unconditionally every time, which is what "Full-history" in this
+      # job's name already promised anyway.
+      - name: Install gitleaks
+        run: |
+          curl -sSfL https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/gitleaks_8.30.1_linux_x64.tar.gz \
+            | tar xz -C /usr/local/bin gitleaks
+      # No SARIF upload to the Security tab: that needs GitHub Advanced
+      # Security, which isn't available on a private repo without an
+      # Enterprise plan ("Resource not accessible by integration" is what
+      # that looks like from upload-sarif, not a permissions misconfig).
+      # The scan itself still gates the build - gitleaks exits 1 on any
+      # real finding regardless of whether the result gets a UI home.
+      - name: Gitleaks (full history)
+        run: gitleaks detect --source . --redact -v
+
+  python-security:
+    needs: changes
+    if: needs.changes.outputs.services != '[]'
+    name: Python security lint (bandit)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v9.0.0
+      - name: Run bandit
+        run: uvx bandit -r services/ -c pyproject.toml
+
+  dependency-audit:
+    needs: changes
+    if: needs.changes.outputs.services != '[]'
+    name: Dependency vulnerability scan (pip-audit)
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        service: ${{ fromJson(needs.changes.outputs.services) }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v9.0.0
+      - name: Export locked dependencies
+        working-directory: services/${{ matrix.service }}
+        # --no-emit-project: exercise-insights became a real installable
+        # package in this PR (hatchling, no longer `package = false`), so
+        # without this flag uv emits an editable `-e .` line for the
+        # project itself. pip-audit --require-hashes then fails outright
+        # ("cannot be installed when requiring hashes, because there is no
+        # single file to hash") - it only ever needs to audit third-party
+        # deps, never the project's own source. Same fix already applied to
+        # exercise-insights/Dockerfile's uv export step.
+        run: uv export --frozen --no-dev --no-emit-project --format requirements.txt -o requirements-audit.txt
+      - name: Run pip-audit
+        working-directory: services/${{ matrix.service }}
+        run: uvx pip-audit -r requirements-audit.txt
+
+  container-scan:
+    name: Container image scan (Trivy)
+    # Verified end-to-end locally (TMPDIR pointed at a disk with real free
+    # space - the default /tmp is a small tmpfs that hit a genuine disk-quota
+    # error here regardless of this repo). Found 6 real HIGH CVEs baked into
+    # AWS's own public.ecr.aws/lambda/python:3.12 base image itself (gawk,
+    # glib2, rpm/rpm-libs) - not this repo's code or dependencies, and not
+    # reachable through anything our Lambda handlers actually do. Suppressed
+    # by CVE ID, with rationale and a re-check date, in .trivyignore at the
+    # repo root - see that file for the full reasoning.
+    needs: changes
+    if: needs.changes.outputs.container_services != '[]'
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        service: ${{ fromJson(needs.changes.outputs.container_services) }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build image
+        working-directory: services/${{ matrix.service }}
+        run: docker build -t ${{ matrix.service }}:scan .
+      - name: Run Trivy
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: ${{ matrix.service }}:scan
+          severity: CRITICAL,HIGH
+          exit-code: "1"
+          trivyignores: .trivyignore
+
+  terraform-security:
+    name: Terraform security scan (Trivy config)
+    # tfsec, not checkov - tfsec is deprecated upstream (merged into Trivy in
+    # 2024, no new features land in the standalone tool - aquasecurity/tfsec
+    # itself says so), so this reuses the same tool already running as
+    # container-scan above instead of adding a second scanner dependency.
+    # Verified locally first (same discipline as container-scan): found 1
+    # real, free fix (SNS topic had no encryption at all - now uses the
+    # AWS-managed key, see monitoring.tf), 2 already-decided tradeoffs
+    # (S3/SNS not using a customer-managed KMS key - docs/architecture.md's
+    # Observability section), and 4 false positives (Trivy's static
+    # analysis has a documented gap linking a for_each-based
+    # aws_s3_bucket_public_access_block to a for_each-based bucket with a
+    # computed name - aquasecurity/trivy#4997/#5001/#6385 - confirmed by
+    # reading s3.tf directly: the resource is there, all 4 flags true).
+    # All suppressions are by AVD ID with rationale in .trivyignore, same
+    # convention as container-scan's CVE suppressions.
+    needs: changes
+    if: needs.changes.outputs.terraform == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run Trivy (Terraform config scan)
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          scan-type: "config"
+          scan-ref: "terraform"
+          severity: CRITICAL,HIGH
+          exit-code: "1"
+          trivyignores: .trivyignore

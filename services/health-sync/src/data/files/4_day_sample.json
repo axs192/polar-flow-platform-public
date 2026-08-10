@@ -1,0 +1,50 @@
+[
+    {
+        "start_time": "2025-09-07T12:36",
+        "end_time": "2025-09-07T23:59:30",
+        "active_duration": "PT5H5M",
+        "inactive_duration": "PT4H44M",
+        "daily_activity": 44.43,
+        "calories": 2260,
+        "active_calories": 644,
+        "steps": 6278,
+        "inactivity_alert_count": 1,
+        "distance_from_steps": 3692.33
+    },
+    {
+        "start_time": "2025-09-08T00:00",
+        "end_time": "2025-09-08T23:59:59",
+        "active_duration": "PT7H6M30S",
+        "inactive_duration": "PT9H11M30S",
+        "daily_activity": 62.93,
+        "calories": 2684,
+        "active_calories": 997,
+        "steps": 9606,
+        "inactivity_alert_count": 1,
+        "distance_from_steps": 5237.74
+    },
+    {
+        "start_time": "2025-09-09T00:00",
+        "end_time": "2025-09-09T23:59:59",
+        "active_duration": "PT6H51M30S",
+        "inactive_duration": "PT11H27M30S",
+        "daily_activity": 82.79,
+        "calories": 2826,
+        "active_calories": 1122,
+        "steps": 11576,
+        "inactivity_alert_count": 0,
+        "distance_from_steps": 6990.18
+    },
+    {
+        "start_time": "2025-09-10T00:00",
+        "end_time": "2025-09-10T12:48",
+        "active_duration": "PT2H11M30S",
+        "inactive_duration": "PT4H13M",
+        "daily_activity": 25.15,
+        "calories": 1265,
+        "active_calories": 386,
+        "steps": 4050,
+        "inactivity_alert_count": 1,
+        "distance_from_steps": 2235.57
+    }
+]
