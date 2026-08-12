@@ -116,6 +116,6 @@ resource "aws_iam_role_policy" "gha_deploy" {
 }
 
 output "gha_deploy_role_arn" {
-  description = "Set as the AWS_DEPLOY_ROLE_ARN repo variable (gh variable set) - never commit this literal ARN, it contains the real account id."
+  description = "Set as the AWS_DEPLOY_ROLE_ARN repo secret (gh secret set), not a repo variable - GitHub Actions variables are readable by anyone with read access to the repo (public = everyone), and this ARN contains the real account id."
   value       = aws_iam_role.gha_deploy.arn
 }
